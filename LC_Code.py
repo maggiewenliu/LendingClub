@@ -26,6 +26,8 @@ import matplotlib.pyplot as plt
 os.chdir(r"/Users/beckswu/Desktop/Lending Club/For Maggie")
 
 
+#This is a sample change
+
 def process_zip():
     zip_data=pd.read_csv('ZIP.csv')
     #zip_data['Zip']=zip_data['Zip'].astype(str)
