@@ -25,7 +25,6 @@ import matplotlib.pyplot as plt
 
 os.chdir(r"/Users/beckswu/Desktop/Lending Club/For Maggie")
 
-This is sample
 
 def process_zip():
     zip_data=pd.read_csv('ZIP.csv')
