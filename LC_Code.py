@@ -27,6 +27,7 @@ os.chdir(r"/Users/beckswu/Desktop/Lending Club/For Maggie")
 
 
 #This is a sample change
+#This is another beach 
 
 def process_zip():
     zip_data=pd.read_csv('ZIP.csv')
