@@ -115,6 +115,7 @@ def readcsv():
         
 def cleaning(df,zip_new,keep_desc=True,categorical_to_binary=True):
     #drop the observation that was missing for ALL field
+    # drop 一整行都丢失的数据
     #python 中axis = 0表示列， axis = 1 表示行
     #how = ‘any’ : If any NA values are present, drop that row or column.
     #how = ‘all’ : If all values are NA, drop that row or column.
@@ -319,7 +320,7 @@ class log_reg():
 """
 
 if os.path.isfile("zipdata.pkl"):
-    zipdate = pd.read_pickle("zipdata.pkl")
+    zipdata = pd.read_pickle("zipdata.pkl")
 else:
     zipdata = process_zip()
     zipdata.to_pickle("zipdata.pkl")
