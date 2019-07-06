@@ -15,6 +15,10 @@
 
 4. 怎么定义model performance? ROC? F1-score?  accuracy?
 
+5. 研究为什么drop 与 y 相关的variable？ 什么是conflict的variable？
+
+6。
+
 Python Code 逻辑
 
 1. 读ZIP csv

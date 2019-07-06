@@ -17,168 +17,17 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 import sklearn
+import tqdm
+
 from sklearn.model_selection import cross_val_score
 import multiprocessing
 import matplotlib.pyplot as plt
 import sklearn.linear_model
 
 import data_process
+import logistic_regression
 
 
-# Evaluate the model by splitting into train and test sets
-def split(x,y,rand=0):
-    
-    #Y 是 pands. Series, 有index 的, np.ravel 就会把Series值抽取然后排开生成一个np.array
-    """
-        ind     Y
-        0       1    
-        1       1
-        2       1
-        
-        np.ravel(y)  = [1,1,1]
-    
-    """
-    
-    y = np.ravel(y) 
-    
-    x_train, x_test, y_train, y_test = sklearn.model_selection.train_test_split(x,y, test_size=0.25,random_state=rand)
-    
-    return x_train, x_test, y_train, y_test 
-
-
- # method two
-def generate_not_bi(x): #找到所有,不是dummy variable的columns
-    not_bi=[]
-    for i in list(x): #list(x) 是所有columns 的名字，i是现在这个column的名字
-        u=x[i].unique()
-        if not (0 in u and 1 in u and len(u)==2): #if not binary
-            not_bi.append(i)
-    return not_bi
-
-
-def reg(x_train, y_train):
-           
-        model = sklearn.linear_model.LogisticRegression(penalty='l2',class_weight='balanced',solver='sag',n_jobs=-1)
-        #penalty ='l2' 是regularization 就是视频里看的regularization
-        
-        
-        #Why we need standardize?
-        
-       # Note that ‘sag’ and ‘saga’ fast convergence is only guaranteed on features 
-       ## with approximately the same scale. You can preprocess the data with 
-       # a scaler from sklearn.preprocessing.
-      
-        model = model.fit(x_train, y_train)
-        
-        return model
-    
-    
-def ModelValuation(x_test,y_test,model):
-    
-    probs = model.predict_proba(x_test)
-    #predict_proba 是返回estimates for all classes are ordered by the label of classes.
-    #因为分类只有0 和 1，所以probs 的shape 是 m * 2, m是x_test数量，每行2个表示预测0和1的概率，加一起等于1
-    #比如[0.237, 0.763]， 表示对于这个test_case, 预测0的概率是0.237， 预测1的概率是0.763
-
-    
-    #ROC 是true_positive_rate (sensitivity) 在y轴 vs false negative rate (= 1 - specificity) 在x轴
-    
-    fpr, tpr, thresholds = sklearn.metrics.roc_curve(y_test, probs[:, 1])
-    # y_test 真是test cast label, probs[:, 1] #我们model预测1的概率probs[:, 1]
-    #fpr false positive rate, tpr true positive rate, 两个都是np.array()
-    # thresholds: threshold 用来judge true & false positive rate
-    
-    plt.figure(1)
-    plt.plot(fpr, tpr, label='LogisticRegression')
-    plt.xlabel('False positive rate')
-    plt.ylabel('True positive rate')
-    plt.title('ROC curve')
-    plt.legend(loc='best')
-    plt.show()
-    
-    print("Area Under the Curve (AUC) from prediction score is %f" % sklearn.metrics.roc_auc_score(y_test, probs[:, 1]))
-
-    return None      
-    
-
-def y_pred(x_test,threshold=0.5):
-    #用来计算y_predict的值，
-    
-    if threshold == 0.5:
-        y_predicted = model.predict(x_test) #generate output class/label
-        #model.predict default 的threshold 是0
-        
-    else:
-        probs = model.predict_proba(x_test) #generate output probability
-        #The first index refers to the probability that the data belong to class 0, and the second refers to the probability that the data belong to class 1.
-        y_predicted = np.array(probs[:,1] >= threshold).astype(int)
-    
-    return y_predicted  
-
-
-
-
-
-    
-def GetScores(y_test,y_predicted):
-    #y_test 是真实的label
-    #y_predicted 是model 预测出来的值
-    
-    
-    #G means score 是paper 中提到的
-    CM =  sklearn.metrics.confusion_matrix(y_test, y_predicted)
-    TN = CM[0,0]
-    FN = CM[1,0]
-    TP = CM[1,1]
-    FP = CM[0,1]
-    
-   #confusion_matrix,  the count of true negatives is [0,0] ,  the count of false negatives is [0,1] 
-   #  the count of true positives is [1,1]  and  the count of false positives is [0,1].
-
-
-    
-    sensitivity = float(TP)/float(TP+FN) #true positive rate, recall, 预测为1的 占所有应该预测为1 的概率
-    specificity = float(TN)/float(TN+FP) #true negative rate, 预测为0的 占所有应该预测为1 的概率
-    
-    G = np.sqrt(sensitivity*specificity)
-    print("G score is %f" % G)
-    print("Specificity is %f" % specificity)
-    
-    # Generate and display different evaluation metrics
-    # accuracy_score 是表示预测对的 占所有test的比例， 预测对的表示 model 预测0， 真实也是0，model 预测1， 真实也是1
-    print("Mean accuracy score is %f" %  sklearn.metrics.accuracy_score(y_test, y_predicted))
-      
-    print("Confusion Marix")
-    print(CM)
-    
-    return specificity , G
-
-
-def confusion(y_test,y_predicted,title):
-    
-    # Define names for the three Iris types
-    names = ['Default', 'Not Default']
-
-    # Make a 2D histogram from the test and result arrays
-    pts, xe, ye = np.histogram2d(y_test, y_predicted, bins=2)
-    #xe 是The bin edges along the first dimension.
-    #xe 是The bin edges along the second dimension.
-    #pts 是与confusion_matrix产生结果是相同的, 是two dimension array
-    
-    #pts: The bi-dimensional histogram of samples x and y. Values in x are histogrammed along the first dimension and values in y are histogrammed along the second dimension.
-
-    # For simplicity we create a new DataFrame,转化成 dataframe
-    pd_pts = pd.DataFrame(pts.astype(int), index=names, columns=names )
-    
-    
-    # Display heatmap and add decorations
-    hm = sns.heatmap(pd_pts, annot=True, fmt="d")
-    #annot=True 表示把数字标进每个cell作为注释
-    #fmt="d", fmt时表示注释 进每个cell的format， d - double number 数字
-    hm.axes.set_title(title)
-
-
-#%% logistic regression
     
 """
 class log_reg():
@@ -224,16 +73,18 @@ class log_reg():
         
         return thresholds[np.argmax(G)]
     # this is just testing, we add weight so we don't need to adjust threshold
-#%% Run logistic regression
-# Process data 
+    
+    
+#%% Process data 
 """
 
 
 # ---------------Read & Process Data-------------------------
 
 
-if os.path.isfile("x.pkl") and os.path.isfile("y.pkl"):
+if os.path.isfile("x.pkl") and os.path.isfile("y.pkl") and os.path.isfile("x_has_category.pkl"):
     x = pd.read_pickle("x.pkl")
+    x_has_category = pd.read_pickle("x_has_category.pkl")
     y  = pd.read_pickle("y.pkl")
 else:
     if os.path.isfile("zipdata.pkl"):
@@ -251,19 +102,27 @@ else:
     x , y = data_process.cleaning(df,zipdata,keep_desc=False,categorical_to_binary=True)
     x.to_pickle("x.pkl")
     y.to_pickle("y.pkl")
+    
+    x_has_category , y = data_process.cleaning(df,zipdata,keep_desc=False,categorical_to_binary=False)
+    x_has_category.to_pickle("x_has_category.pkl")
+#%%  Logistic Regression方法一： 最普通的Logistic Regression
+
+
+"""
+
 
 
 # -----------------------------------Machine Learning-------------------------
 
 
 # Split
-x_train, x_test, y_train, y_test = split(x,y,rand=None)
+x_train, x_test, y_train, y_test = logistic_regression.split(x,y,rand=None)
 
 
 
 # ---------------Normalization--------------------
 
-not_bi = generate_not_bi(x) #不是dummy variable columns
+not_bi = logistic_regression.generate_not_bi(x) #不是dummy variable columns
 #Normalize
 scaler = sklearn.preprocessing.StandardScaler()  #初始化Normalize library
 scaler.fit(x_train[not_bi]) #fit 表示求所有x_train[not_bi] mean variance
@@ -277,71 +136,187 @@ x_test_scaled[not_bi]  = scaler.transform(x_test[not_bi]) #Normalize 不是dummy
 
 
 # ---------------Fit Model--------------------
-model =  reg(x_train_scaled,y_train)
+model =  logistic_regression.reg(x_train_scaled,y_train)
 
 #画ROC Curve的
-ModelValuation(x_test_scaled,y_test,model)
+logistic_regression.ModelValuation(x_test_scaled,y_test,model)
 
 #根据model 计算predict的值
-y_predicted = y_pred(x_test_scaled,threshold=0.5)
+y_predicted = logistic_regression.y_pred(x_test_scaled,model,threshold=0.5)
 
 #算model sensitivity & specificity, G score
-spec , G = GetScores(y_test,y_predicted)
+spec , G = logistic_regression.GetScores(y_test,y_predicted)
 
 #画confusion matrix
-confusion(y_test,y_predicted,'Default Confusion Matrix')
+logistic_regression.confusion(y_test,y_predicted,'Default Confusion Matrix')
 
 #F1-score
 print("F1 score is {}".format(sklearn.metrics.f1_score(y_test,y_predicted)))
 
 
+"""
 
 
 
 
 
 
+
+
+#%% Pre selection
+
+#Logistic Regression方法二： run 10 logistic regression, 然后看specificity & sensitivity 的平均值
 
 
 
 """
-#%% Pre selection
-init=np.zeros([10,2])
+init=np.zeros([10,3]) #产生一个two dimensional 的np.array, size = 10
 
-# Process data
-zipdata = data_proc.process_zip()
-df = data_proc.readcsv()
-x , y = data_proc.cleaning(df,zipdata,keep_desc=False,categorical_to_binary=True)
 
 for i in range(10):
        
     # Split
-    x_train, x_test, y_train, y_test = log_reg.split(x,y,rand=None)
+    x_train, x_test, y_train, y_test = logistic_regression.split(x,y,rand=None)
     # Normalize
-    not_bi = log_reg.not_bi(x)
-    scaler = StandardScaler()
+    
+    # ---------------Normalization--------------------
+    not_bi = logistic_regression.generate_not_bi(x)
+    scaler =  sklearn.preprocessing.StandardScaler()
     scaler.fit(x_train[not_bi]) 
     
-    x_train_scaled=x_train
-    x_test_scaled=x_test
+    x_train_scaled=x_train.copy()
+    x_test_scaled=x_test.copy()
     
     x_train_scaled[not_bi] = scaler.transform(x_train[not_bi])
     x_test_scaled[not_bi]  = scaler.transform(x_test[not_bi])
     
+    
+    
     # Fit model
-    model = log_reg.reg(x_train_scaled,y_train)
-    # Evaluate model
-    log_reg.ModelValuation(x_test_scaled,y_test,model)
-    y_predicted = log_reg.y_pred(x_test_scaled,threshold=0.5)
-    init_spec , init_G = log_reg.GetScores(y_test,y_predicted)
+    model = logistic_regression.reg(x_train_scaled,y_train)
+    # Evaluate model, 画ROC Curve的
+    logistic_regression.ModelValuation(x_test_scaled,y_test,model)
+    
+    #根据model 计算predict的值
+    y_predicted = logistic_regression.y_pred(x_test_scaled,model,threshold=0.5)
+    
+    #算model sensitivity & specificity, G score
+    init_spec , init_G = logistic_regression.GetScores(y_test,y_predicted)
     init[i,0] = init_spec
     init[i,1] = init_G
-    log_reg.confusion(y_test,y_predicted,'Default Confusion Matrix')
+    init[i,2] = sklearn.metrics.f1_score(y_test,y_predicted)
+    
+    #画confusion matrix
+    logistic_regression.confusion(y_test,y_predicted,'Default Confusion Matrix')
 
-init_spec = np.mean(init[:,0])
-init_G = np.mean(init[:,1])
+init_spec_average = np.mean(init[:,0])
+init_G_average  = np.mean(init[:,1])
+f1_average = np.mean(init[:,2])
+
+print("average specificity {0}, average G_Score {1}, average F1-score {2}".\
+      format(init_spec_average, init_G_average,f1_average))
+
+
+f = open("average_specificity.txt", "w")
+f.write(str(init_spec_average))
+f.close()
+
+
+"""
+
+
+
+
+
+
+
 
 #%% Feature selection with ablative method
+
+
+
+##Logistic Regression方法三：这种方法是： 
+    #每次drop 一个feature， 然后如果这个feature 是category的
+
+# 方法三需要方法二中的 average specificity: 方法二的specificity 是所有variable的
+
+if os.path.isfile("average_specificity.txt"):
+    f = open("average_specificity.txt", "r")
+    number = f.read()
+    avrg_speci = float(number)
+    f.close()
+    
+else:
+    print("please run Logisitic Regression 方法二 first ")
+    exit
+
+
+
+x_original = x_has_category.copy()#因为后面会重命名 x， 所以给原始的x 一个新的名字
+
+#这是所有category的数据
+
+features=list(x_original.columns) #列出数据所有的column
+
+times_each_i=1 #代表每个选择的feature集合 run 10次
+ablative=np.zeros([len(features)*times_each_i,5]) #ablative 用来记录每次选择feature的performane
+
+row=0 #用来记录ablative 现在在哪行
+
+for i, feature in tqdm.tqdm(enumerate(features)):
+    #每次drop 一个variable，
+    
+    x = x_original.drop(feature,inplace=False,axis=1)
+
+    categorical_features=set(['addr_state','application_type','emp_length','grade','home_ownership','initial_list_status','pymnt_plan','sub_grade','term','verification_status'])
+
+    if feature in categorical_features:
+        categorical_features.discard(feature)
+
+    #把category column 变成Category的格式
+    #因为categorical_features 是set 格式的，我们要把它变成list 的形式，加list ()
+    x[list(categorical_features)] = x[list(categorical_features)].apply(pd.Categorical)
+    
+    #把category column 生成dummy variable
+    x=pd.get_dummies(x,columns=list(categorical_features),drop_first=True)
+     #产生dummy variable 的同时，会drop 掉原来的column
+    
+    for j in range(times_each_i):
+
+        print(j)
+        
+        # Split
+        x_train, x_test, y_train, y_test = logistic_regression.split(x,y,rand=None)
+        
+        # Normalize
+        not_bi = logistic_regression.generate_not_bi(x)
+        scaler =  sklearn.preprocessing.StandardScaler()
+        scaler.fit(x_train[not_bi]) 
+        
+        x_train_scaled=x_train
+        x_test_scaled=x_test
+        
+        x_train_scaled[not_bi] = scaler.transform(x_train[not_bi])
+        x_test_scaled[not_bi]  = scaler.transform(x_test[not_bi])
+        
+        # Fit model
+        model = logistic_regression.reg(x_train_scaled,y_train)
+        # Evaluate model
+        
+        y_predicted = logistic_regression.y_pred(x_test_scaled,model, threshold=0.5)
+        spec , G = logistic_regression.GetScores(y_test,y_predicted)
+                
+        ablative[row,0] = i
+        ablative[row,1] = j
+        ablative[row,2] = spec
+        ablative[row,3] = G
+        ablative[row,4] = avrg_speci - spec
+        
+        row=row+1
+
+
+"""
+
 x_stor , y = data_proc.cleaning(df,zipdata,keep_desc=False,categorical_to_binary=False)
 
 categorical_features=['addr_state','application_type','emp_length','grade','home_ownership','initial_list_status','pymnt_plan','sub_grade','term','verification_status']
@@ -367,6 +342,8 @@ for i in range(len(features)):
         if j in list(x):
             x[j]=x[j].astype('category')
             x = pd.get_dummies(x,columns={j},drop_first=False)
+            #drop first表示比如 有a, b, c 三个category, 但dummy drop a， 只生成 b, c 两个 dummy variable
+                
     for j in range(times_each_i):
 
         print(j)

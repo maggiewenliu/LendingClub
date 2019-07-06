@@ -9,7 +9,6 @@ Created on Sat Jul  6 00:14:03 2019
 import os
 import pandas as pd
 
-os.chdir(r"/Users/beckswu/Desktop/Lending Club/For Maggie")
 
 def process_zip():
     zip_data=pd.read_csv('ZIP.csv')
@@ -98,7 +97,7 @@ def readcsv():
 def cleaning(df,zipdata,keep_desc=True,categorical_to_binary=True):
     #drop the observation that was missing for ALL field
     # drop 一整行都丢失的数据
-    #python 中axis = 0表示列， axis = 1 表示行
+    #python 中axis = 0 along the row， axis = 1 along the column
     #how = ‘any’ : If any NA values are present, drop that row or column.
     #how = ‘all’ : If all values are NA, drop that row or column.
     df=df.dropna(axis=0,how='all').copy() #当一行都是na，drop
@@ -120,7 +119,7 @@ def cleaning(df,zipdata,keep_desc=True,categorical_to_binary=True):
     desc=df['desc']
     
     #数每个attribute(column) 不是nan的个数
-    num_rows=df.count(axis=0)
+    num_rows=df.count(axis=0) #size 是column 的数
     
     #drop the features for which greater than 10% of the loans were missing data for
     #如果缺失的数据多于整个dataframe的row 的10%丢掉， 只保留attribute whose 有90% 不为NA。
@@ -155,7 +154,10 @@ def cleaning(df,zipdata,keep_desc=True,categorical_to_binary=True):
             if i in list(df): #list(df) 就是 df.columns
                 #list(df) 等于 df.columns
                 df[i]=df[i].astype('category')
+                
                 df=pd.get_dummies(df,columns={i},drop_first=True)
+                #产生dummy variable 的同时，会drop 掉原来的column
+                #drop first表示比如 有a, b, c 三个category, 但dummy drop a， 只生成 b, c 两个 dummy variable
                 #生成dummy variable 
         
         """
