@@ -3,11 +3,17 @@
 
 需要懂的点
 
-1. 什么是default / Non default 定义, y = 0的定义
+1. 看这个视频https://www.youtube.com/watch?v=OAl6eAyP-yo
+
+2. https://en.wikipedia.org/wiki/Sensitivity_and_specificity 
+ 知道什么是sensitivity specificity 
+
+2. 什么是default / Non default 定义, y = 0的定义
     - 比如什么是 'Charged Off',  'Does not meet the credit policy. Status:Charged Off','Late (31-120 days)','In Grace Period','Late (16-30 days)','Default'
-2. 什么是不default 定义, y = 1的定义
+3. 什么是不default 定义, y = 1的定义
     - 'Fully Paid','Does not meet the credit policy. Status:Fully Paid','Current'
 
+4. 怎么定义model performance? ROC? F1-score?  accuracy?
 
 Python Code 逻辑
 
