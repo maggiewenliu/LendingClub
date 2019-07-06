@@ -20,7 +20,7 @@ import sklearn
 from sklearn.model_selection import cross_val_score
 import multiprocessing
 import matplotlib.pyplot as plt
-
+import sklearn.linear_model
 
 import data_process
 
@@ -290,6 +290,17 @@ spec , G = GetScores(y_test,y_predicted)
 
 #画confusion matrix
 confusion(y_test,y_predicted,'Default Confusion Matrix')
+
+#F1-score
+print("F1 score is {}".format(sklearn.metrics.f1_score(y_test,y_predicted)))
+
+
+
+
+
+
+
+
 
 
 
