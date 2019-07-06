@@ -1,6 +1,12 @@
 1. Read Data Science Process
 2. Read data
 
+需要懂的点
+
+1. 什么是default / Non default 定义, y = 0的定义
+    - 比如什么是 'Charged Off',  'Does not meet the credit policy. Status:Charged Off','Late (31-120 days)','In Grace Period','Late (16-30 days)','Default'
+2. 什么是不default 定义, y = 1的定义
+    - 'Fully Paid','Does not meet the credit policy. Status:Fully Paid','Current'
 
 
 Python Code 逻辑

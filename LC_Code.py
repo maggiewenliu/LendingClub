@@ -16,177 +16,52 @@ import os
 import pandas as pd
 import numpy as np
 import seaborn as sns
+import sklearn
 from sklearn import metrics
-from sklearn.model_selection import train_test_split , cross_val_score
+from sklearn.model_selection import cross_val_score
 from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import StandardScaler
 import multiprocessing
 import matplotlib.pyplot as plt
 
-os.chdir(r"/Users/beckswu/Desktop/Lending Club/For Maggie")
+
+import data_process
 
 
-#This is a sample change
-#This is another beach 
-
-def process_zip():
-    zip_data=pd.read_csv('ZIP.csv')
-    #zip_data['Zip']=zip_data['Zip'].astype(str)
+# Evaluate the model by splitting into train and test sets
+def split(x,y,rand=0):
     
-    #转化string, 只存zip的前三位fsa
-    zip_data['Zip'] = zip_data['Zip'].apply(lambda x: (('0' if x<10000 else '')+ str(x))[:3]) 
-    
-    #去掉'Median','Mean','Pop' 数据中的逗号, 比如'52,234' 变成 ‘52234’
-    zip_data[['Median','Mean','Pop']]=zip_data[['Median','Mean','Pop']].apply(lambda x: x.str.replace(',',''))
-    
-    #把 'Median','Mean','Pop' 从string 变成 double value
-    for i in ['Median','Mean','Pop']:
-        zip_data.loc[:,i]=pd.to_numeric(zip_data.loc[:,i],errors='coerce')
+    #Y 是 pands. Series, 有index 的, np.ravel 就会把Series值抽取然后排开生成一个np.array
+    """
+        ind     Y
+        0       1    
+        1       1
+        2       1
         
-    #zip_data.groupby('Zip') 是把同一个zip 的group 到一起变成，tuple, tuple[0]是三位数的zip， tuple[1] 是属于zip的dataframe, 
-    #  比如原来一行 原zip 是 8990, 另一行 原zip 是 8991, 那么这两行同时放进group 后同一个tuple, tuple[0] = 089, tuple[1] 包含这两行的数据
-    #  把每个tuple[1]的population 相加得到sum, 用tansform的作用是让它格式get back to original dataframe, 
-    # 比如原来原zip 是 8990, zip = 089, zip_data.groupby('Zip')['Pop'] 会生成一个sum, 在这行，表示所有089的sum
-    
-    
-    zip_data['weight']=zip_data['Pop']/zip_data.groupby('Zip')['Pop'].transform(sum)
-
-    #乘以weight
-    zip_data['new_mean']=zip_data['Mean']*zip_data['weight']
-    
-    #乘以new_median 
-    zip_data['new_median']=zip_data['Median']*zip_data['weight']
-    
-    zip_new=pd.DataFrame()
-    
-    """
-    现在zip 格式是
-    
-     Zip  Median     Mean    Pop    weight      new_mean    new_median
-0    010   56663  66688.0  16445  0.036549   2437.373812   2437.373812  
-1    010   49853  75063.0  28069  0.062383   4682.668653   3109.988681
-    
+        np.ravel(y)  = [1,1,1]
     
     """
     
+    y = np.ravel(y) 
     
+    x_train, x_test, y_train, y_test = sklearn.model_selection.train_test_split(x,y, test_size=0.25,random_state=rand)
     
-    #根据zip groupby，把同一个zip的文件的new_mean, new_median 都sum 起来
-    zip_new=zip_data.groupby('Zip')['new_mean','new_median'].sum()
-    
-    """
-    现在zip_new 格式是， 注意现在index 是zip, 而不是数字了
-    
-        new_mean     new_median
-Zip                              
-010   68997.226192   57290.974026
-011   54979.626027   42377.127888
-012   65706.935838   50845.603610
-    """
-    #zip key is zip
-    return zip_new
+    return x_train, x_test, y_train, y_test 
 
 
-
-
-
-def readcsv():
-
-    csv_list=['LoanStats3a_securev1.csv', 'LoanStats3b_securev1.csv', 
-              'LoanStats3c_securev1.csv','LoanStats3d_securev1.csv']
-   
-    df=pd.DataFrame()           
-    for i in csv_list:
-       cur = pd.read_csv(i, encoding = "ISO-8859-1", low_memory=False) #不用管encoding
-       df = pd.concat([df,cur])
-    return df    
-
-
-
-
-
-
-
-
-
-
-
-
-        
-def cleaning(df,zip_new,keep_desc=True,categorical_to_binary=True):
-    #drop the observation that was missing for ALL field
-    # drop 一整行都丢失的数据
-    #python 中axis = 0表示列， axis = 1 表示行
-    #how = ‘any’ : If any NA values are present, drop that row or column.
-    #how = ‘all’ : If all values are NA, drop that row or column.
-    df=df.dropna(axis=0,how='all') #当一行都是na，drop
-    
-    
-   
-    #drop the meaningless features
-    #inplace=True 表示在df中操作，如果不在df中操作, inplace=False is passed 表示在df copy中操作，不影响df
-    df.drop(['id', 'last_pymnt_d','url','earliest_cr_line', 'emp_title','issue_d','last_credit_pull_d','purpose','title','hardship_flag','policy_code'],inplace=True,axis=1,errors='ignore')
-    #drop features that have confilicting meaning for y
-    df.drop(['total_pymnt','total_pymnt_inv','total_rec_prncp','total_rec_int','total_rec_late_fee','recoveries','collection_recovery_fee','last_pymnt_amnt'],inplace=True,axis=1,errors='ignore')
-    #drop the features that have nothing
-    df.dropna(inplace=True,axis=1,how='all')
-    
-    #pick up description
-    desc=df['desc']
-    #drop the features for which greater than 10% of the loans were missing data for
-    #如果缺失的数据多于整个dataframe的row 的10%， 丢掉
-    num_rows=df.count(axis=0)
-    df=df.iloc[:,(num_rows>=0.9*len(df)).tolist()]
-    #merge back desc
-    if keep_desc==True:
-        df=pd.concat([df,desc],axis=1)
-
-    #drop the observation that was missing for any field
-    df=df.dropna(axis=0,how='any')
-    
-    #deal with percentage mark
-    df['int_rate']=df['int_rate'].replace('%','',regex=True).astype('float')/100
-    df['revol_util']=df['revol_util'].replace('%','',regex=True).astype('float')/100
-    
-    #dealing with categorical features
-    if categorical_to_binary==True:
-        categorical_features=['addr_state','application_type','emp_length','grade','home_ownership','initial_list_status','pymnt_plan','sub_grade','term','verification_status']
-        for i in categorical_features:
-            if i in list(df): #list(df) 就是 df.columns
-                df[i]=df[i].astype('category')
-                df=pd.get_dummies(df,columns={i},drop_first=True)
-    #get dummies drop first 是只弄k-1个variable 把第1个variable 去掉
-    
-    
-    #merge zipcode with census data
-    df['zip_code']=df['zip_code'].apply(lambda x: x[:3])
-    df=df.join(zip_new,on='zip_code')
-    df.drop('zip_code',inplace=True,axis=1)
-    #drop the observation that was missing for any field
-    df=df.dropna(axis=0,how='any')
-        
-    #label the dataset to create y, 建立0，1 variables
-    y=df['loan_status'].replace(['Charged Off','Does not meet the credit policy. Status:Charged Off','Late (31-120 days)','In Grace Period','Late (16-30 days)','Default'],0)
-    y=y.replace(['Fully Paid','Does not meet the credit policy. Status:Fully Paid','Current'],1)
-    df=df.drop(['loan_status'],axis=1)    
-    
-    return df,y
-
-
-"""
-class data_proc():
-    
-
+ # method two
+def not_bi(x): #找到所有,不是dummy variable的columns
+    not_bi=[]
+    for i in list(x): #list(x) 是所有columns 的名字，i是现在这个column的名字
+        u=x[i].unique()
+        if not (0 in u and 1 in u and len(u)==2): #if not binary
+            not_bi.append(i)
+    return not_bi
 
 #%% logistic regression
+    
+"""
 class log_reg():
-    # Evaluate the model by splitting into train and test sets
-    def split(x,y,rand=0):
-        
-        y = np.ravel(y)
-        x_train, x_test, y_train, y_test = train_test_split(x,y, test_size=0.25,random_state=rand)
-        
-        return x_train, x_test, y_train, y_test 
+
     #we need to add validation dataset here
     
     # Find binary column method one
@@ -201,14 +76,7 @@ class log_reg():
                     bool_cols.append(col)
         return bool_cols
     # this above step is to facilitate normalization later
-    # method two
-    def not_bi(x): #找到不是dummy variable的columns
-        not_bi=[]
-        for i in list(x):
-            u=x[i].unique()
-            if not (0 in u and 1 in u and len(u)==2): #if not binary
-                not_bi.append(i)
-        return not_bi
+   
     
     def reg(x_train, y_train):
            
@@ -319,19 +187,45 @@ class log_reg():
 # Process data 
 """
 
-if os.path.isfile("zipdata.pkl"):
-    zipdata = pd.read_pickle("zipdata.pkl")
-else:
-    zipdata = process_zip()
-    zipdata.to_pickle("zipdata.pkl")
 
-if os.path.isfile("loan.pkl"):
-    df = pd.read_pickle("loan.pkl")
-else:
-    df =  readcsv()
-    df.to_pickle("loan.pkl")
+# ---------------Read & Process Data-------------------------
 
-x , y = cleaning(df,zipdata,keep_desc=False,categorical_to_binary=True)
+
+if os.path.isfile("x.pkl") and os.path.isfile("y.pkl"):
+    x = pd.read_pickle("x.pkl")
+    y  = pd.read_pickle("y.pkl")
+else:
+    if os.path.isfile("zipdata.pkl"):
+        zipdata = pd.read_pickle("zipdata.pkl")
+    else:
+        zipdata = data_process.process_zip()
+        zipdata.to_pickle("zipdata.pkl")
+    
+    if os.path.isfile("loan.pkl"):
+        df = pd.read_pickle("loan.pkl")
+    else:
+        df =  data_process.readcsv()
+        df.to_pickle("loan.pkl")
+    
+    x , y = data_process.cleaning(df,zipdata,keep_desc=False,categorical_to_binary=True)
+    x.to_pickle("x.pkl")
+    y.to_pickle("y.pkl")
+
+
+# ---------------Machine Learning-------------------------
+
+
+# Split
+x_train, x_test, y_train, y_test = split(x,y,rand=None)
+
+
+not_bi = not_bi(x) #不是dummy variable columns
+#Normalize
+scaler = sklearn.preprocessing.StandardScaler() 
+scaler.fit(x_train[not_bi]) 
+
+x_train_scaled=x_train
+x_test_scaled=x_test
 
 
 """
@@ -339,15 +233,8 @@ x , y = cleaning(df,zipdata,keep_desc=False,categorical_to_binary=True)
 #x_=x.copy()
 #y_=y.copy()
 
-# Split
-x_train, x_test, y_train, y_test = log_reg.split(x,y,rand=None)
-# Normalize
-not_bi = log_reg.not_bi(x) #不是dummy variable columns
-scaler = StandardScaler() #normalization
-scaler.fit(x_train[not_bi]) 
 
-x_train_scaled=x_train
-x_test_scaled=x_test
+
 
 x_train_scaled[not_bi] = scaler.transform(x_train[not_bi])
 x_test_scaled[not_bi]  = scaler.transform(x_test[not_bi])
