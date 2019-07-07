@@ -119,7 +119,7 @@ def cleaning(df,zipdata,keep_desc=True,categorical_to_binary=True):
     desc=df['desc']
     
     #数每个attribute(column) 不是nan的个数
-    num_rows=df.count(axis=0) #size 是column 的数
+    num_rows=df.count(axis=0) # 是个list  1*128
     
     #drop the features for which greater than 10% of the loans were missing data for
     #如果缺失的数据多于整个dataframe的row 的10%丢掉， 只保留attribute whose 有90% 不为NA。

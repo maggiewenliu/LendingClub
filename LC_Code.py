@@ -28,57 +28,6 @@ import data_process
 import logistic_regression
 
 
-    
-"""
-class log_reg():
-
-    #we need to add validation dataset here
-    
-    # Find binary column method one
-    def bool_cols(df,isbool=True):
-        bool_cols=[]
-        for col in df:
-            if isbool==True:
-                if df[col].dropna().value_counts().index.isin([0,1]).all():
-                    bool_cols.append(col)
-            else:
-                if not df[col].dropna().value_counts().index.isin([0,1]).all():
-                    bool_cols.append(col)
-        return bool_cols
-    # this above step is to facilitate normalization later
-   
-
-        
-    # Convenience function to plot confusion matrix
-
-            
-    def find_threshold(x_test,y_test):
-    
-        probs = model.predict_proba(x_test)
-        fpr, tpr, thresholds = metrics.roc_curve(y_test, probs[:, 1])
-        
-        sensitivity = tpr
-        specificity = 1 - fpr
-        G = np.sqrt(sensitivity*specificity)
-        
-        plt.figure(2)
-        plt.plot(thresholds,G)
-        plt.xlabel('Thresholds')
-        plt.ylabel('G-Scores')
-        plt.title('G-Scores with different thresholds')
-        plt.show()
-        
-        
-        print("The highest G score is %f with threshold at %f" % (np.amax(G),thresholds[np.argmax(G)]) )
-        
-        return thresholds[np.argmax(G)]
-    # this is just testing, we add weight so we don't need to adjust threshold
-    
-    
-#%% Process data 
-"""
-
-
 # ---------------Read & Process Data-------------------------
 
 
@@ -105,16 +54,22 @@ else:
     
     x_has_category , y = data_process.cleaning(df,zipdata,keep_desc=False,categorical_to_binary=False)
     x_has_category.to_pickle("x_has_category.pkl")
+
+
+#zipdata = data_proc.process_zip()
+#df = data_proc.readcsv()
+#x , y = data_proc.cleaning(df,zipdata,keep_desc=False,categorical_to_binary=True)
+
 #%%  Logistic Regression方法一： 最普通的Logistic Regression
 
 
-"""
+
 
 
 
 # -----------------------------------Machine Learning-------------------------
 
-
+"""
 # Split
 x_train, x_test, y_train, y_test = logistic_regression.split(x,y,rand=None)
 
@@ -153,7 +108,6 @@ logistic_regression.confusion(y_test,y_predicted,'Default Confusion Matrix')
 #F1-score
 print("F1 score is {}".format(sklearn.metrics.f1_score(y_test,y_predicted)))
 
-
 """
 
 
@@ -164,6 +118,9 @@ print("F1 score is {}".format(sklearn.metrics.f1_score(y_test,y_predicted)))
 
 
 #%% Pre selection
+
+# -----------------------------------方法 二  ------------------------------
+
 
 #Logistic Regression方法二： run 10 logistic regression, 然后看specificity & sensitivity 的平均值
 
@@ -233,10 +190,16 @@ f.close()
 
 #%% Feature selection with ablative method
 
+# -----------------------------------方法 三  ------------------------------
 
+
+need_run_selection = True #是不是需要run feature selection
+#因为很费时间，如果已经run好，直接读数据，不用重新run
 
 ##Logistic Regression方法三：这种方法是： 
-    #每次drop 一个feature， 然后如果这个feature 是category的
+    #每次drop 一个feature， 然后如果这个feature 是category的, 也不生成dummy variable
+        #， run logistic regression， 得到drop variable的一个specificity的difference 的值
+    #然后根据这个值选出我们想要的variable（有16个），然后再run 一个logistics regression
 
 # 方法三需要方法二中的 average specificity: 方法二的specificity 是所有variable的
 
@@ -251,161 +214,135 @@ else:
     exit
 
 
-
-x_original = x_has_category.copy()#因为后面会重命名 x， 所以给原始的x 一个新的名字
-
-#这是所有category的数据
-
-features=list(x_original.columns) #列出数据所有的column
-
-times_each_i=1 #代表每个选择的feature集合 run 10次
-ablative=np.zeros([len(features)*times_each_i,5]) #ablative 用来记录每次选择feature的performane
-
-row=0 #用来记录ablative 现在在哪行
-
-for i, feature in tqdm.tqdm(enumerate(features)):
-    #每次drop 一个variable，
+if need_run_selection or os.path.isfile("useful_feature.txt"): 
     
-    x = x_original.drop(feature,inplace=False,axis=1)
-
-    categorical_features=set(['addr_state','application_type','emp_length','grade','home_ownership','initial_list_status','pymnt_plan','sub_grade','term','verification_status'])
-
-    if feature in categorical_features:
-        categorical_features.discard(feature)
-
-    #把category column 变成Category的格式
-    #因为categorical_features 是set 格式的，我们要把它变成list 的形式，加list ()
-    x[list(categorical_features)] = x[list(categorical_features)].apply(pd.Categorical)
+    x_original = x_has_category.copy()#因为后面会重命名 x， 所以给原始的x 一个新的名字
     
-    #把category column 生成dummy variable
-    x=pd.get_dummies(x,columns=list(categorical_features),drop_first=True)
-     #产生dummy variable 的同时，会drop 掉原来的column
+    #这是所有category的数据
     
-    for j in range(times_each_i):
-
-        print(j)
-        
-        # Split
-        x_train, x_test, y_train, y_test = logistic_regression.split(x,y,rand=None)
-        
-        # Normalize
-        not_bi = logistic_regression.generate_not_bi(x)
-        scaler =  sklearn.preprocessing.StandardScaler()
-        scaler.fit(x_train[not_bi]) 
-        
-        x_train_scaled=x_train
-        x_test_scaled=x_test
-        
-        x_train_scaled[not_bi] = scaler.transform(x_train[not_bi])
-        x_test_scaled[not_bi]  = scaler.transform(x_test[not_bi])
-        
-        # Fit model
-        model = logistic_regression.reg(x_train_scaled,y_train)
-        # Evaluate model
-        
-        y_predicted = logistic_regression.y_pred(x_test_scaled,model, threshold=0.5)
-        spec , G = logistic_regression.GetScores(y_test,y_predicted)
-                
-        ablative[row,0] = i
-        ablative[row,1] = j
-        ablative[row,2] = spec
-        ablative[row,3] = G
-        ablative[row,4] = avrg_speci - spec
-        
-        row=row+1
-
-
-"""
-
-x_stor , y = data_proc.cleaning(df,zipdata,keep_desc=False,categorical_to_binary=False)
-
-categorical_features=['addr_state','application_type','emp_length','grade','home_ownership','initial_list_status','pymnt_plan','sub_grade','term','verification_status']
-features=list(x_stor)
-
-times_each_i=10
-ablative=np.zeros([len(features)*times_each_i,5])
-
-row=0
-for i in range(len(features)):
+    features=list(x_original.columns) #列出数据所有的column
     
-    print(i)
+    times_each_i=10 #代表每个选择的feature集合 run 10次
+    ablative=np.zeros([len(features)*times_each_i,5]) #ablative 用来记录每次选择feature的performane
     
-    x = x_stor.drop(features[i],inplace=False,axis=1)
-
-    # get_dummies
-    if features[i] in categorical_features:
-        new_cat = [x for x in categorical_features if not x==features[i]]
-    else:
-        new_cat = categorical_features
+    row=0 #用来记录ablative 现在在哪行
+    
+    for i, feature in tqdm.tqdm(enumerate(features)):
+        #每次drop 一个variable，
+        print("current Feature",feature)
+        x = x_original.drop(feature,inplace=False,axis=1)
+    
+        categorical_features=set(['addr_state','application_type','emp_length','grade','home_ownership','initial_list_status','pymnt_plan','sub_grade','term','verification_status'])
+    
+        if feature in categorical_features:
+            categorical_features.discard(feature)
+    
+        #把category column 变成Category的格式
+        #因为categorical_features 是set 格式的，我们要把它变成list 的形式，加list ()
+        x[list(categorical_features)] = x[list(categorical_features)].apply(pd.Categorical)
+        
+        #把category column 生成dummy variable
+        x=pd.get_dummies(x,columns=list(categorical_features),drop_first=True)
+         #产生dummy variable 的同时，会drop 掉原来的column
+        
+        for j in range(times_each_i):
+    
+            print("case",j)
             
-    for j in new_cat:
-        if j in list(x):
-            x[j]=x[j].astype('category')
-            x = pd.get_dummies(x,columns={j},drop_first=False)
-            #drop first表示比如 有a, b, c 三个category, 但dummy drop a， 只生成 b, c 两个 dummy variable
-                
-    for j in range(times_each_i):
+            # Split
+            x_train, x_test, y_train, y_test = logistic_regression.split(x,y,rand=None)
+            
+            # Normalize
+            not_bi = logistic_regression.generate_not_bi(x)
+            scaler =  sklearn.preprocessing.StandardScaler()
+            scaler.fit(x_train[not_bi]) 
+            
+            x_train_scaled=x_train.copy()
+            x_test_scaled=x_test.copy()
+            
+            x_train_scaled[not_bi] = scaler.transform(x_train[not_bi])
+            x_test_scaled[not_bi]  = scaler.transform(x_test[not_bi])
+            
+            # Fit model
+            model = logistic_regression.reg(x_train_scaled,y_train)
+            # Evaluate model
+            
+            y_predicted = logistic_regression.y_pred(x_test_scaled,model, threshold=0.5)
+            spec , G = logistic_regression.GetScores(y_test,y_predicted)
+                    
+            ablative[row,0] = i
+            ablative[row,1] = j
+            ablative[row,2] = spec
+            ablative[row,3] = G
+            ablative[row,4] = avrg_speci - spec
+            
+            row=row+1
+      
+    ab=pd.DataFrame(ablative.copy()) #需要 ablative.copy(）, 否则 更改 ab 也会更改 ablative    
+    mean=ab.groupby(0)[4].mean() #生成一个dataframe 以去掉每个variable 的集合 groupby 求avrg_speci-specificity的平均值
+    mean=mean.rename('marginal_contribution') #重新命名column的名字
+    
+    
+    df1=pd.DataFrame(features,columns=['features'])
+    result=pd.concat([df1,mean],axis=1)
+    
+    #result 是dataframe 是取掉的variable 和 avearge specificity 和 specifity 的mean,
+    #e,g
+    #   features         means
+    #  acc_now_delinq -0.00380852683686983
+    #  addr_state    0.0027713851171323745
+    #  annual_inc    0.0030456075697351537
+    
+    
+    result=result.set_index('features')
+    result=result.sort_values('marginal_contribution') #根据marginal_contribution 来sortmarginal_contribution
+    
+    
+    result['deprecated']=(result['marginal_contribution']<=0)
+    #生成一个column 看 marginal_contribution(average difference) 是不是小于0
+    #e,g
+    #   features         marginal_contribution  deprecated
+    #  acc_now_delinq -0.00380852683686983     True
+    #  addr_state    0.0027713851171323745    False
+    #  annual_inc    0.0030456075697351537   False
+    
+    useful_features=result.index[result['deprecated']==False].tolist()
+    #把有用的feature 跳出来，
+    
+    #把useful_feature output出去
+    outfile =  open("useful_feature.txt","w")
+    outfile.write(",".join(useful_features)) 
+    #",".join(useful_features) 表示把list中每个string 用"," 连在一起 变成一个大string
+    outfile.close()
 
-        print(j)
-        
-        # Split
-        x_train, x_test, y_train, y_test = log_reg.split(x,y,rand=None)
-        
-        # Normalize
-        not_bi = log_reg.not_bi(x)
-        scaler = StandardScaler()
-        scaler.fit(x_train[not_bi]) 
-        
-        x_train_scaled=x_train
-        x_test_scaled=x_test
-        
-        x_train_scaled[not_bi] = scaler.transform(x_train[not_bi])
-        x_test_scaled[not_bi]  = scaler.transform(x_test[not_bi])
-        
-        # Fit model
-        model = log_reg.reg(x_train_scaled,y_train)
-        # Evaluate model
-        
-        y_predicted = log_reg.y_pred(x_test_scaled,threshold=0.5)
-        spec , G = log_reg.GetScores(y_test,y_predicted)
-                
-        ablative[row,0] = i
-        ablative[row,1] = j
-        ablative[row,2] = spec
-        ablative[row,3] = G
-        ablative[row,4] = init_spec - spec
-        
-        row=row+1
-#%%
-ab=ablative.copy()        
-ab=pd.DataFrame(ab)        
-mean=ab.groupby(0)[4].mean()
-mean=mean.rename('marginal_contribution')      
-#%%
-df1=pd.DataFrame(features,columns=['features'])
-df2=mean
-result=pd.concat([df1,df2],axis=1)
-result=result.set_index('features')
-result=result.sort_values('marginal_contribution')
-result['deprecated']=(result['marginal_contribution']<=0)
-useful_features=result.index[result['deprecated']==False].tolist()
+else:
+    read_file =  open("useful_feature.txt","r")
+    useful_feature = read_file.read().split(',') 
+    #read_file.read() 生成一个大string，把attribute 用逗号隔开, e.g. 'out_prncp,revol_bal,.....'
+    #.split(',') 把string 用逗号分开变成list 
+    read_file.close()
+    
 
 
-#%% use the filter features to fit model
-x=x_stor[useful_features]
+#------------------------根据选出的feature，再run logistic regression---------------------------------
 
-categorical_features=['addr_state','application_type','emp_length','grade','home_ownership','initial_list_status','pymnt_plan','sub_grade','term','verification_status']
-categorical_features=list(set(categorical_features) & set(list(x)) )
+x=x_original[useful_features]
 
-for i in categorical_features:
-    x[i]=x[i].astype('category')
-    x = pd.get_dummies(x,columns=[i],drop_first=False)
+categorical_features=set(['addr_state','application_type','emp_length','grade','home_ownership','initial_list_status','pymnt_plan','sub_grade','term','verification_status'])
+#选取只有useful_features中出现有用的feature
+
+categorical_features=list( categorical_features & set(list(x)) )
+#list(x) 表示 x.columns 
+# categorical_features & set(list(x)) 表示两个set 取交集
+
+#建立dummy variable
+x = pd.get_dummies(x,columns=categorical_features,drop_first=False)
 
 # Split
-x_train, x_test, y_train, y_test = log_reg.split(x,y,rand=None)
+x_train, x_test, y_train, y_test = logistic_regression.split(x,y,rand=None)
 # Normalize
-not_bi = log_reg.not_bi(x)
-scaler = StandardScaler()
+not_bi = logistic_regression.generate_not_bi(x)
+scaler = sklearn.preprocessing.StandardScaler()
 scaler.fit(x_train[not_bi]) 
 
 x_train_scaled=x_train
@@ -415,28 +352,58 @@ x_train_scaled[not_bi] = scaler.transform(x_train[not_bi])
 x_test_scaled[not_bi]  = scaler.transform(x_test[not_bi])
 
 # Fit model
-model = log_reg.reg(x_train_scaled,y_train)
+model = logistic_regression.reg(x_train_scaled,y_train)
 
 # get score
-y_predicted = log_reg.y_pred(x_test_scaled,threshold=0.5)
-log_reg.GetScores(y_test,y_predicted)
-log_reg.confusion(y_test,y_predicted,'Default Confusion Matrix')
+y_predicted = logistic_regression.y_pred(x_test_scaled,model,threshold=0.5)
+logistic_regression.ModelValuation(x_test_scaled,y_test,model)
+logistic_regression.GetScores(y_test,y_predicted)
+logistic_regression.confusion(y_test,y_predicted,'Default Confusion Matrix')
+
+#------------------------找到最理想的threshold---------------------------------
+
+
+best_threshold = logistic_regression.find_threshold(x_test_scaled,y_test,model)
+# Evaluate model, 用刚选取的threshold 来test model
+y_predicted = logistic_regression.y_pred(x_test_scaled,model, threshold=best_threshold)
+logistic_regression.GetScores(y_test,y_predicted)
+logistic_regression.confusion(y_test,y_predicted,'Default Confusion Matrix')
+
+
+print("F1 score is {}".format(sklearn.metrics.f1_score(y_test,y_predicted)))
+
+
+
+
+# ---------------------------coef 没有什么用处--------------------------------------------
 
 # Get coef
 df1 = pd.DataFrame(list(x),columns=['features'])
 df2 = pd.DataFrame(np.transpose(model.coef_),columns=['coef'])
-df3 = pd.DataFrame(abs(np.transpose(model.coef_)),columns=['coef_abs'])
-coefficients = pd.concat([df1,df2,df3], axis = 1)
-coefficients = coefficients.sort_values(by='coef_abs',ascending=False)
-#%% graph
+#np.transpose 是因为 model.coef_是1*74, 我们想让它变成74*1 dataframe
 
-index = np.arange(len(coefficients))
+df3 = pd.DataFrame(abs(np.transpose(model.coef_)),columns=['coef_abs'])
+
+coefficients = pd.concat([df1,df2,df3], axis = 1)
+# coffeicient 是
+#   features         coffeicient    coffeicient绝对值
+#  acc_now_delinq       -5               5
+#  addr_state          10.2             10.2
+#  annual_inc           -3.78            3.78
+
+#根据coef_absolute value 来sort dataframe
+coefficients = coefficients.sort_values(by='coef_abs',ascending=False)
+
+
+
+# ---------------------------——画图, 画出coefficient 没有什么用处----------------------
+index = np.arange(len(coefficients))#生成一个np.array([1,2,3....,74])
 bar_width = 0.35
+
 
 plt.bar(index, coefficients['coef_abs'])
 plt.xticks(index + bar_width / 2, coefficients['features'],rotation=-90)
 
-#%% horizontal graph
 
 plt.rcdefaults()
 fig, ax = plt.subplots()
@@ -455,13 +422,13 @@ ax.set_title('Absolute coefficient for each feature')
 
 plt.show()
 
-#%% Find the best threshold, should be run after previous section
-    
-best_threshold = log_reg.find_threshold(x_test_scaled,y_test)
-# Evaluate model
-y_predicted = log_reg.y_pred(x_test_scaled,threshold=best_threshold)
-log_reg.GetScores(y_test,y_predicted)
-log_reg.confusion(y_test,y_predicted,'Default Confusion Matrix')
+
+
+
+
+"""
+
+
 
 #%% cross validate
 
@@ -492,93 +459,7 @@ score = metrics.make_scorer(scr, greater_is_better=True)
 model = LogisticRegression(penalty='l2',class_weight='balanced',solver='sag',n_jobs=-1)
 scores = cross_val_score(model, x, y, cv=3, n_jobs=-1 ,scoring = 'accuracy')
 scores
-
-#%% SVM
-from sklearn import svm
-from sklearn import preprocessing
-
-# Process data
-        
-zipdata = data_proc.process_zip()
-df = data_proc.readcsv()
-x , y = data_proc.cleaning(df,zipdata,keep_desc=False,categorical_to_binary=True)
-#x_=x.copy()
-#y_=y.copy()
-
-# Split
-x_train, x_test, y_train, y_test = log_reg.split(x,y,rand=None)
-# Normalize
-not_bi = log_reg.not_bi(x)
-scaler = StandardScaler()
-scaler.fit(x_train[not_bi]) 
-
-x_train_scaled=x_train
-x_test_scaled=x_test
-
-x_train_scaled[not_bi] = scaler.transform(x_train[not_bi])
-x_test_scaled[not_bi]  = scaler.transform(x_test[not_bi])
-
-
-
-
-
-#SVM model needs normalization
-
-model = svm.SVC()
-model.fit(x_train_scaled, y_train)
-
-# get score
-y_predicted = log_reg.y_pred(x_test_scaled,threshold=0.5)
-log_reg.GetScores(y_test,y_predicted)
-log_reg.confusion(y_test,y_predicted,'Default Confusion Matrix')
-#%%
-
-
-
-k=['linear','polynomial','rbf','sigmoid ']
-
-def f1(i):
-    model = svm.SVC(kernel=k[i])
-    model.fit(x_train_scaled, y_train)
-    GetScores(x_test_scaled,y_test,model)
-def f2(i):
-    model = svm.SVC(kernel=k[i])
-    model.fit(x_train_scaled, y_train)
-    GetScores(x_test_scaled,y_test,model)
-def f3(i):
-    model = svm.SVC(kernel=k[i])
-    model.fit(x_train_scaled, y_train)
-    GetScores(x_test_scaled,y_test,model)
-def f4(i):
-    model = svm.SVC(kernel=k[i])
-    model.fit(x_train_scaled, y_train)
-    GetScores(x_test_scaled,y_test,model)    
-
-threads=[]
-t1=multiprocessing.Process(target=f1(0),daemon=True)
-threads.append(t1)
-t2=multiprocessing.Process(target=f2(1),daemon=True)
-threads.append(t2)
-t3=multiprocessing.Process(target=f3(2),daemon=True)
-threads.append(t3)
-t4=multiprocessing.Process(target=f4(3),daemon=True)
-threads.append(t4)
-
-
-if __name__ == '__main__':
-    for i in threads:
-        i.start()
-    for i in threads:
-        i.join()
-
-
-
-#for i in kernel:
-#    model = svm.SVC(kernel=i)
-#    model.fit(x_train, y_train)
-#    GetScores(x_test,y_test,model)
-
-"""        
+"""
         
         
         

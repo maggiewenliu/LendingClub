@@ -1,0 +1,1 @@
+fico_range_high,revol_bal,fico_range_low,funded_amnt_inv,initial_list_status,home_ownership,delinq_2yrs,pub_rec_bankruptcies,annual_inc,total_acc,last_fico_range_high

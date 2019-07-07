@@ -171,3 +171,32 @@ def confusion(y_test,y_predicted,title):
     hm.axes.set_title(title)
     plt.show()
 
+
+
+
+
+def find_threshold(x_test,y_test, model):
+    
+    #找到最后的threshold
+
+    probs = model.predict_proba(x_test)
+    fpr, tpr, thresholds = sklearn.metrics.roc_curve(y_test, probs[:, 1])
+    
+    
+    sensitivity = tpr #sensitivity 是np.array, size 与fpr, tpr,thresholds 一样
+    specificity = 1 - fpr #specificity 是np.array, size 与fpr, tpr,thresholds 一样
+    G = np.sqrt(sensitivity*specificity)#GG 是Np.array，size 与fpr, tpr,thresholds 一样 
+    
+    plt.figure(2)
+    plt.plot(thresholds,G)
+    plt.xlabel('Thresholds')
+    plt.ylabel('G-Scores')
+    plt.title('G-Scores with different thresholds')
+    plt.show()
+    
+    
+    print("The highest G score is %f with threshold at %f" % (np.amax(G),thresholds[np.argmax(G)]) )
+    
+    #np.argmax(G), 找到最大数的index
+    #比如G = np.array([5,6,1,2]), np.argmax(G) = 1 (因为6最大)
+    return thresholds[np.argmax(G)]
